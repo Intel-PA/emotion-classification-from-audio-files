@@ -7,6 +7,7 @@ import time
 import joblib
 import librosa
 import numpy as np
+from pathlib import Path
 
 from config import SAVE_DIR_PATH
 from config import TRAINING_FILES_PATH
@@ -59,7 +60,9 @@ class CreateFeatures:
 
         # Preparing features dump
         X_name, y_name = 'X.joblib', 'y.joblib'
-
+        Path(save_dir).mkdir()
+        Path(f'{save_dir}{X_name}').touch()
+        Path(f'{save_dir}{y_name}').touch()
         joblib.dump(X, os.path.join(save_dir, X_name))
         joblib.dump(y, os.path.join(save_dir, y_name))
 
