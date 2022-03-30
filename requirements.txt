@@ -3,3 +3,4 @@ matplotlib
 pip-chill==1.0.1
 tensorflow
 sklearn
+librosa
