@@ -73,7 +73,8 @@ class TrainModel:
         plt.legend(['train', 'test'], loc='upper left')
         plt.savefig('accuracy.png')
 
-        predictions = model.predict_classes(x_testcnn)
+        predict_x = model.predict(x_testcnn)
+        predictions = np.argmax(predict_x, axis=1)
         new_y_test = y_test.astype(int)
         matrix = confusion_matrix(new_y_test, predictions)
 
@@ -92,6 +93,6 @@ class TrainModel:
 
 if __name__ == '__main__':
     print('Training started')
-    X = joblib.load(SAVE_DIR_PATH + '\\X.joblib')
-    y = joblib.load(SAVE_DIR_PATH + '\\y.joblib')
+    X = joblib.load(SAVE_DIR_PATH + 'X.joblib')
+    y = joblib.load(SAVE_DIR_PATH + 'y.joblib')
     NEURAL_NET = TrainModel.train_neural_network(X=X, y=y)
