@@ -65,8 +65,8 @@ class TrainModel:
         plt.close()
 
         # Accuracy plotting
-        plt.plot(cnn_history.history['accuracy'])
-        plt.plot(cnn_history.history['val_accuracy'])
+        plt.plot(cnn_history.history['acc'])
+        plt.plot(cnn_history.history['val_acc'])
         plt.title('model accuracy')
         plt.ylabel('acc')
         plt.xlabel('epoch')
