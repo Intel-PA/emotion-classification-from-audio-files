@@ -5,12 +5,12 @@ import os
 import joblib
 import numpy as np
 import matplotlib.pyplot as plt
-from keras.layers import Dense
-from keras.layers import Conv1D
-from keras.layers import Flatten
-from keras.layers import Dropout
-from keras.layers import Activation
-from keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Conv1D
+from tensorflow.keras.layers import Flatten
+from tensorflow.keras.layers import Dropout
+from tensorflow.keras.layers import Activation
+from tensorflow.keras.models import Sequential
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
