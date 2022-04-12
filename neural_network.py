@@ -2,6 +2,8 @@
 Neural network train file.
 """
 import os
+import sys
+
 import joblib
 import numpy as np
 from pathlib import Path
@@ -21,7 +23,7 @@ from wandb.keras import WandbCallback
 
 from config import SAVE_DIR_PATH
 from config import MODEL_DIR_PATH
-from config import MODEL_NAME
+
 
 class TrainModel:
 
@@ -97,7 +99,10 @@ class TrainModel:
 
 
 if __name__ == '__main__':
+    model_name = sys.argv[1]
     print('Training started')
     X = joblib.load(SAVE_DIR_PATH + 'X.joblib')
     y = joblib.load(SAVE_DIR_PATH + 'y.joblib')
-    TrainModel.train_neural_network(X=X, y=y, run_name=MODEL_NAME)
+    X_val = joblib.load(SAVE_DIR_PATH + 'X_val.joblib')
+    y_val = joblib.load(SAVE_DIR_PATH + 'y_val.joblib')
+    TrainModel.train_neural_network(X_train=X, y_train=y, X_test=X_val, y_test=y_val,  run_name=model_name)
