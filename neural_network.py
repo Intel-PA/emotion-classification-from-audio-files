@@ -4,6 +4,8 @@ Neural network train file.
 import os
 import joblib
 import numpy as np
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import Conv1D
@@ -14,20 +16,22 @@ from tensorflow.keras.models import Sequential
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
-
+import wandb
+from wandb.keras import WandbCallback
 
 from config import SAVE_DIR_PATH
 from config import MODEL_DIR_PATH
-
+from config import MODEL_NAME
 
 class TrainModel:
 
     @staticmethod
-    def train_neural_network(X, y) -> None:
+    def train_neural_network(X_train, y_train, X_test, y_test, run_name) -> None:
         """
         This function trains the neural network.
         """
-
+        wandb.init(project="emoclass_soxaugment_performance", reinit=True)
+        wandb.run.name = run_name
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 
         x_traincnn = np.expand_dims(X_train, axis=2)
@@ -51,8 +55,9 @@ class TrainModel:
                       metrics=['accuracy'])
 
         cnn_history = model.fit(x_traincnn, y_train,
-                               batch_size=16, epochs=50,
-                               validation_data=(x_testcnn, y_test))
+                                batch_size=16, epochs=5,
+                                validation_data=(x_testcnn, y_test),
+                                callbacks=[WandbCallback()])
 
         # Loss plotting
         plt.plot(cnn_history.history['loss'])
@@ -95,4 +100,4 @@ if __name__ == '__main__':
     print('Training started')
     X = joblib.load(SAVE_DIR_PATH + 'X.joblib')
     y = joblib.load(SAVE_DIR_PATH + 'y.joblib')
-    NEURAL_NET = TrainModel.train_neural_network(X=X, y=y)
+    TrainModel.train_neural_network(X=X, y=y, run_name=MODEL_NAME)
