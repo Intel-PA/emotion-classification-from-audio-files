@@ -53,7 +53,6 @@ class CreateFeatures:
                     arr = mfccs, filename
                     lst.append(arr)
                     melspecs_lst.append((mel_db, filename))
-                    break
                 # If the file is not valid, skip it
                 except ValueError as err:
                     print(err)
