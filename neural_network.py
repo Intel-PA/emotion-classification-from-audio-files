@@ -57,7 +57,7 @@ class TrainModel:
                       metrics=['accuracy'])
 
         cnn_history = model.fit(x_traincnn, y_train,
-                                batch_size=16, epochs=5,
+                                batch_size=16, epochs=100,
                                 validation_data=(x_testcnn, y_test),
                                 callbacks=[WandbCallback()])
 
@@ -101,6 +101,7 @@ class TrainModel:
 if __name__ == '__main__':
     model_name = sys.argv[1]
     print('Training started')
+    SAVE_DIR_PATH = SAVE_DIR_PATH + model_name
     X = joblib.load(SAVE_DIR_PATH + 'X.joblib')
     y = joblib.load(SAVE_DIR_PATH + 'y.joblib')
     X_val = joblib.load(SAVE_DIR_PATH + 'X_val.joblib')

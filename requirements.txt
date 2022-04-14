@@ -5,3 +5,5 @@ tensorflow
 sklearn
 librosa
 wandb
+torch
+torchaudio
