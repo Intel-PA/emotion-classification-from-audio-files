@@ -17,15 +17,8 @@ import sys
 import pathlib
 
 working_dir_path = pathlib.Path().absolute()
-if sys.platform.startswith('win32'):
-    TRAINING_FILES_PATH = str(working_dir_path) + '\\features\\'
-    SAVE_DIR_PATH = str(working_dir_path) + '\\joblib_features\\'
-    MODEL_DIR_PATH = str(working_dir_path) + '\\model\\'
-    TESS_ORIGINAL_FOLDER_PATH = str(working_dir_path) + '\\TESS_Toronto_emotional_speech_set_data\\'
-    EXAMPLES_PATH = str(working_dir_path) + '\\examples\\'
-else:
-    TRAINING_FILES_PATH = str(working_dir_path) + f'/features/'
-    SAVE_DIR_PATH = str(working_dir_path) + '/joblib_features/'
-    MODEL_DIR_PATH = str(working_dir_path) + '/model/'
-    TESS_ORIGINAL_FOLDER_PATH = str(working_dir_path) + '/TESS_Toronto_emotional_speech_set_data/'
-    EXAMPLES_PATH = str(working_dir_path) + '/examples/'
+TRAINING_FILES_PATH = working_dir_path / '/features/'
+SAVE_DIR_PATH = working_dir_path / '/joblib_features/'
+MODEL_DIR_PATH = working_dir_path / '/model/'
+TESS_ORIGINAL_FOLDER_PATH = pathlib.Path("/root/kavi/datasets/ravdess").resolve()
+EXAMPLES_PATH = working_dir_path / '/examples/'

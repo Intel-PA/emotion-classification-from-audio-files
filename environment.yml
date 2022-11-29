@@ -1,0 +1,26 @@
+name: emoclass
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - cudatoolkit=11.1
+  - python=3.8
+  - pytorch-gpu=1.8.0 
+  - torchaudio=0.8.0
+  - sox=14.4.2
+  - pip:
+    - tensorflow 
+    - sklearn
+    - cython==0.29.12 
+    - librosa==0.8.0 
+    - numba==0.48 
+    - unidecode 
+    - inflect 
+    - tensorboard 
+    - matplotlib 
+    - wandb 
+    - future
+    - packaging
+    - sox==1.4.1
+    - tqdm==4.60.0
+
