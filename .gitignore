@@ -13,3 +13,4 @@ venv
 *.h5
 wandb/
 *.png
+audio_aug/
