@@ -38,8 +38,8 @@ class CreateFeatures:
                 try:
                     # Load librosa array, obtain mfcss, store the file and the mcss information in a new array
                     X, sample_rate = librosa.load(filepath, res_type='kaiser_fast')
-                    num_mfcc = 40
-                    dct_type = 2
+                    # num_mfcc = 40
+                    # dct_type = 2
                     # mfccs_librosa = np.mean(librosa.feature.mfcc(y=X, sr=sample_rate,
                     #                                      n_mfcc=num_mfcc).T, axis=0)
 
@@ -61,30 +61,30 @@ class CreateFeatures:
                     continue
 
         # Applies specaugment
-        if specaugment:
-            print(f"Total dataset size: {len(melspecs_lst)}")
-            #melspecs_lst = melspecs_lst[: int(specaugment_gamma * len(melspecs_lst))]
-            print(f"Subsampled size: {len(melspecs_lst)}")
-            augmented_lst = []
-            augmentation_count = 0
-            for mel, label in melspecs_lst:
-                g = 1 / specaugment_gamma
-                augmented_spectros = [(CreateFeatures.mel_to_mfcc(mel), label)]
-                for x in range(math.ceil(g) - 1):
-                    if (math.ceil(g) - g == 0) or (random.random() > math.ceil(g) - g):
-                        spectro = torch.from_numpy(mel).float()
-                        spectro = torch.unsqueeze(spectro, 0)
-                        spectro_aug = time_warp(time_mask(freq_mask(spectro, num_masks=2), num_masks=2))
-                        spectro_aug = torch.squeeze(spectro_aug)
-                        spectro_aug = spectro_aug.numpy()
-                        mfcc = CreateFeatures.mel_to_mfcc(spectro_aug)
-                        augmented_spectros.append((mfcc, label))
-                        augmentation_count += 1
-                augmented_lst += augmented_spectros
-            lst = augmented_lst
-            random.shuffle(lst)
-            print(f"Total Augmented size: {len(lst)} ({augmentation_count} augmented)")
-        return lst
+        # if specaugment:
+        #     print(f"Total dataset size: {len(melspecs_lst)}")
+        #     #melspecs_lst = melspecs_lst[: int(specaugment_gamma * len(melspecs_lst))]
+        #     print(f"Subsampled size: {len(melspecs_lst)}")
+        #     augmented_lst = []
+        #     augmentation_count = 0
+        #     for mel, label in melspecs_lst:
+        #         g = 1 / specaugment_gamma
+        #         augmented_spectros = [(CreateFeatures.mel_to_mfcc(mel), label)]
+        #         for x in range(math.ceil(g) - 1):
+        #             if (math.ceil(g) - g == 0) or (random.random() > math.ceil(g) - g):
+        #                 spectro = torch.from_numpy(mel).float()
+        #                 spectro = torch.unsqueeze(spectro, 0)
+        #                 spectro_aug = time_warp(time_mask(freq_mask(spectro, num_masks=2), num_masks=2))
+        #                 spectro_aug = torch.squeeze(spectro_aug)
+        #                 spectro_aug = spectro_aug.numpy()
+        #                 mfcc = CreateFeatures.mel_to_mfcc(spectro_aug)
+        #                 augmented_spectros.append((mfcc, label))
+        #                 augmentation_count += 1
+        #         augmented_lst += augmented_spectros
+        #     lst = augmented_lst
+        #     random.shuffle(lst)
+        #     print(f"Total Augmented size: {len(lst)} ({augmentation_count} augmented)")
+        # return lst
 
     @staticmethod
     def features_creator(train_filelist, val_filelist, save_dir, specaugment_gamma) -> str:

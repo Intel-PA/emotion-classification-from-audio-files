@@ -1,70 +1,83 @@
+import wandb
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import Conv1D
 from tensorflow.keras.layers import Flatten
 from tensorflow.keras.layers import Dropout
 from tensorflow.keras.layers import Activation
-import numpy as np
+
+from data_util import RavdessDataset
+from config import TESS_ORIGINAL_FOLDER_PATH
 
 
+def get_model():
+    inputs = keras.Input(shape=(40, 1))
+    outputs = Conv1D(64, 5, padding='same',
+                     input_shape=(40, 1))(inputs)
+    outputs = Activation('relu')(outputs)
+    outputs = Dropout(0.2)(outputs)
+    outputs = Flatten()(outputs)
+    outputs = Dense(8)(outputs)
+    outputs = Activation('softmax')(outputs)
+    model = keras.Model(inputs=inputs, outputs=outputs)
+    return model
 
-inputs = Conv1D(64, 5, padding='same',
-                 input_shape=(40, 1)) 
 
-outputs = Activation('relu')(inputs)
-outputs = Dropout(0.2)(outputs)
-outputs = Flatten()(outputs)
-outputs = Dense(8)(outputs)
-outputs = Activation('softmax')(outputs)
-model = keras.Model(inputs=inputs, outputs=outputs)
+def train(augmentor, model, epochs, batch_sz):
+    run_name_elements = augmentor.config["run_name"].split("_")
+    project_name = "_".join(run_name_elements[:2])  # Use experiment and kind names
+    wandb.init(project=project_name, reinit=True)
+    wandb.run.name = augmentor.config["run_name"]
 
-optim = keras.optimizers.RMSprop()
-loss_fn = keras.losses.SparseCategoricalCrossentropy()
-datasets = {
-    'train': 1,
-    'val': 2
-}
-metrics = {
-    'train': keras.metrics.SparseCategoricalAccuracy(),
-    'val': keras.metrics.SparseCategoricalAccuracy()
-}
-
-def train(epochs, batch_sz, datasets, metrics, optimiser, loss_fn):
+    rd = RavdessDataset(batch_sz, TESS_ORIGINAL_FOLDER_PATH)
+    rd.load_process()
+    t, v = rd.split(val_pct=0.33)
+    optimiser = keras.optimizers.RMSprop()
+    loss_fn = keras.losses.SparseCategoricalCrossentropy()
+    datasets = {
+        'train': t,
+        'val': v
+    }
+    metrics = {
+        'train': keras.metrics.SparseCategoricalAccuracy(),
+        'val': keras.metrics.SparseCategoricalAccuracy()
+    }
     for epoch in range(epochs):
-        print("\nStart of epoch %d" % (epoch,))
+        for mode in ['train', 'val']:
+            print("\nStart of epoch %d" % (epoch,))
+            dataset = datasets[mode]
+            metric = metrics[mode]
+            is_train = (mode == "train")
 
-        # Iterate over the batches of the dataset.
-        for step, (x_batch_train, y_batch_train) in enumerate(train_ds):
-            with tf.GradientTape() as tape:
-                logits = model(x_batch_train, training=True)
-                loss_value = loss_fn(y_batch_train, logits)
-            grads = tape.gradient(loss_value, model.trainable_weights)
-            optim.apply_gradients(zip(grads, model.trainable_weights))
+            for step, (x_batch, y_batch) in enumerate(dataset):
+                if is_train:
+                    with tf.GradientTape() as tape:
+                        logits = model(x_batch, training=is_train)
+                        loss_value = loss_fn(y_batch, logits)
 
-            # Update training metric.
-            train_acc_metric.update_state(y_batch_train, logits)
+                        grads = tape.gradient(loss_value, model.trainable_weights)
+                        optimiser.apply_gradients(zip(grads, model.trainable_weights))
+                else:
+                    logits = model(x_batch, training=is_train)
+                    loss_value = loss_fn(y_batch, logits)
 
-            # Log every 200 batches.
-            if step % 200 == 0:
-                print(
-                    "Training loss (for one batch) at step %d: %.4f"
-                    % (step, float(loss_value))
-                )
-                print("Seen so far: %d samples" % ((step + 1) * batch_sz))
+                # Update metric.
+                metric.update_state(y_batch, logits)
 
-        # Display metrics at the end of each epoch.
-        train_acc = train_acc_metric.result()
-        print("Training acc over epoch: %.4f" % (float(train_acc),))
+                # Log every 200 batches.
+                # if step % 200 == 0:
+                #     print(f"{mode} loss (for one batch) at step {step}: {float(loss_value):.4f}")
+                #     print(f"Seen so far: {(step + 1) * batch_sz} samples")
 
-        # Reset training metrics at the end of each epoch
-        train_acc_metric.reset_states()
+            # Display metrics at the end of each epoch.
+            acc = metric.result()
+            print(f"{mode} acc : {float(acc)}, loss: {float(loss_value)}")
 
-        # Run a validation loop at the end of each epoch.
-        for x_batch_val, y_batch_val in val_ds:
-            val_logits = model(x_batch_val, training=False)
-            # Update val metrics
-            val_acc_metric.update_state(y_batch_val, val_logits)
-        val_acc = val_acc_metric.result()
-        val_acc_metric.reset_states()
-        print("Validation acc: %.4f" % (float(val_acc),))
+            # Reset training metrics at the end of each epoch
+            metric.reset_states()
+    wandb.join()
+
+if __name__ == '__main__':
+    train(150, 16)

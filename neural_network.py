@@ -57,7 +57,7 @@ class TrainModel:
                       metrics=['accuracy'])
 
         cnn_history = model.fit(x_traincnn, y_train,
-                                batch_size=16, epochs=100,
+                                batch_size=16, epochs=150,
                                 validation_data=(x_testcnn, y_test),
                                 callbacks=[WandbCallback()])
 
