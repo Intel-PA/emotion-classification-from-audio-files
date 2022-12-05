@@ -11,6 +11,8 @@ from config import TESS_ORIGINAL_FOLDER_PATH
 
 
 def mel_to_mfcc(mel, num_mfcc=40, dct_type=2):
+    if not isinstance(mel, np.ndarray):
+        mel = mel.cpu().numpy()
     mfccs = scipy.fftpack.dct(mel, axis=-2, type=dct_type, norm='ortho')[..., :num_mfcc, :]
     return np.mean(mfccs.T, axis=0)
 
@@ -35,8 +37,7 @@ class RavdessDataset:
     def mel_fn(self, signal):
         mel_power = librosa.feature.melspectrogram(y=signal, sr=self.sampling_rate)
         mel_db = librosa.core.power_to_db(mel_power)
-        mfccs = mel_to_mfcc(mel_db)
-        return tf.convert_to_tensor(mfccs)
+        return mel_db
 
     def get_class(self, filepath: Path) -> int:
         label = int(filepath.name[7:8]) - 1
@@ -86,14 +87,17 @@ class RavdessDataset:
         # only augment train batch
         batch = next(iter(self.train_ds))
         signals, labels = batch
+        signals = signals.numpy().astype(np.float)
         if self.augmenter is not None:
-            aug_mfccs = self.augmenter.augment_batch(signals)
+            aug_batch = self.augmenter.augment_batch(list(zip(labels, signals)))
+            labels, aug_melspecs = list(zip(*aug_batch))
+            aug_mfccs = [mel_to_mfcc(m) for m in aug_melspecs]
             batch = (tf.convert_to_tensor(aug_mfccs), labels)
         else:
             mfccs = []
             for signal in signals:
                 signal = signal.numpy().astype(np.float)
-                m = self.mel_fn(signal)
+                m = mel_to_mfcc(self.mel_fn(signal))
                 mfccs.append(m)
             batch = (tf.convert_to_tensor(mfccs), labels)
         return batch
@@ -103,7 +107,7 @@ class RavdessDataset:
         mfccs = []
         for signal in signals:
             signal = signal.numpy().astype(np.float)
-            m = self.mel_fn(signal)
+            m = mel_to_mfcc(self.mel_fn(signal))
             mfccs.append(m)
         batch = (tf.convert_to_tensor(mfccs), labels)
         return batch

@@ -1,7 +1,6 @@
 joblib==1.1.0
 matplotlib
 pip-chill==1.0.1
-tensorflow-gpu==2.7.0
 sklearn
 librosa
 wandb
