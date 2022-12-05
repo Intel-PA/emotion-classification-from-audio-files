@@ -65,13 +65,6 @@ class RavdessDataset:
 
         signals = tf.keras.preprocessing.sequence.pad_sequences(signals)
         self.loaded_dataset = tf.data.Dataset.from_tensor_slices((signals, labels))
-        # Shuffle data and create batches
-        self.loaded_dataset = self.loaded_dataset.shuffle(buffer_size=shuffle_size)
-        self.loaded_dataset = self.loaded_dataset.repeat()
-        self.loaded_dataset = self.loaded_dataset.batch(self.batch_sz)
-
-        # Make dataset fetch batches in the background during the training of the model.
-        self.loaded_dataset = self.loaded_dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
     def split(self, val_pct):
         train_pct = 1 - val_pct
@@ -79,9 +72,15 @@ class RavdessDataset:
         val_size = int(val_pct * self.size)
         train_ds = self.loaded_dataset.take(train_size)
         val_ds = self.loaded_dataset.skip(train_size).take(val_size)
-        self.train_ds = train_ds
-        self.val_ds = val_ds
-        return train_ds, val_ds
+        # Shuffle data and create batches
+        train_ds = train_ds.shuffle(buffer_size=1000)
+        self.train_ds = train_ds.batch(self.batch_sz)
+
+        # Make dataset fetch batches in the background during the training of the model.
+
+        val_ds = val_ds.shuffle(buffer_size=1000)
+        self.val_ds = val_ds.batch(self.batch_sz)
+
 
     def get_train_batch(self):
         # only augment train batch
@@ -101,14 +100,31 @@ class RavdessDataset:
 
     def get_val_batch(self):
         signals, labels = next(iter(self.val_ds))
-        mfccs = self.mel_fn(signals)
+        mfccs = []
+        for signal in signals:
+            signal = signal.numpy().astype(np.float)
+            m = self.mel_fn(signal)
+            mfccs.append(m)
         batch = (tf.convert_to_tensor(mfccs), labels)
         return batch
 
 
 if __name__ == "__main__":
-    rd = RavdessDataset(16, TESS_ORIGINAL_FOLDER_PATH)
-    rd.load_process()
-    while True:
-        mfccs, labels = rd.get_train_batch()
-        print(mfccs.shape, labels.shape)
+    from audio_aug.augment import get_augment_schemes
+    import logging
+
+    template = "audio_aug/specaugment_scheme.yml"
+    runs = get_augment_schemes(gammas=[0.5, 0.75, 0.875, 1],
+                               num_runs=1,
+                               template_file=template,
+                               name_prefix="something")
+
+    for run_num, augmentor in enumerate(runs):
+        logging.info(f"Starting Run: {augmentor.config['run_name']} with gamma={augmentor.config['params']['gamma']}")
+        rd = RavdessDataset(16, TESS_ORIGINAL_FOLDER_PATH, augmenter=augmentor)
+        for batch_num, item in enumerate(rd.train_ds):
+            print("-------------------------------")
+            print(f"batch_num: {batch_num}, item: {item[0].shape}")
+            mfccs, labels = rd.get_val_batch()
+            print(mfccs.shape, labels.shape)
+            print("-------------------------------")

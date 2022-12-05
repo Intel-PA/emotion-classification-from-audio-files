@@ -6,7 +6,7 @@ from audio_aug.augment import get_augment_schemes
 
 
 if __name__ == '__main__':
-    experiment_name = "spec"
+    experiment_name = "emoclass_propExp_spec"
     base_args = sys.argv[1:]  # Remove script name
     template = "audio_aug/specaugment_scheme.yml"
     runs = get_augment_schemes(gammas=[0.5, 0.75, 0.875, 1],

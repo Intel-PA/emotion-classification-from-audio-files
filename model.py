@@ -31,14 +31,18 @@ def train(augmentor, model, epochs, batch_sz):
     wandb.init(project=project_name, reinit=True)
     wandb.run.name = augmentor.config["run_name"]
 
-    rd = RavdessDataset(batch_sz, TESS_ORIGINAL_FOLDER_PATH)
-    rd.load_process()
-    t, v = rd.split(val_pct=0.33)
+    rd = RavdessDataset(batch_sz, TESS_ORIGINAL_FOLDER_PATH, augmenter=augmentor)
     optimiser = keras.optimizers.RMSprop()
     loss_fn = keras.losses.SparseCategoricalCrossentropy()
     datasets = {
-        'train': t,
-        'val': v
+        'train': {
+            'dataset': rd.train_ds,
+            'get_batch_fn': rd.get_train_batch
+        },
+        'val': {
+            'dataset': rd.val_ds,
+            'get_batch_fn': rd.get_val_batch
+        },
     }
     metrics = {
         'train': keras.metrics.SparseCategoricalAccuracy(),
@@ -47,11 +51,13 @@ def train(augmentor, model, epochs, batch_sz):
     for epoch in range(epochs):
         for mode in ['train', 'val']:
             print("\nStart of epoch %d" % (epoch,))
-            dataset = datasets[mode]
+            dataset = datasets[mode]['dataset']
+            get_batch_fn = datasets[mode]['get_batch_fn']
             metric = metrics[mode]
             is_train = (mode == "train")
 
-            for step, (x_batch, y_batch) in enumerate(dataset):
+            for step, _ in enumerate(dataset):
+                (x_batch, y_batch) = get_batch_fn()
                 if is_train:
                     with tf.GradientTape() as tape:
                         logits = model(x_batch, training=is_train)
@@ -66,13 +72,9 @@ def train(augmentor, model, epochs, batch_sz):
                 # Update metric.
                 metric.update_state(y_batch, logits)
 
-                # Log every 200 batches.
-                # if step % 200 == 0:
-                #     print(f"{mode} loss (for one batch) at step {step}: {float(loss_value):.4f}")
-                #     print(f"Seen so far: {(step + 1) * batch_sz} samples")
-
             # Display metrics at the end of each epoch.
             acc = metric.result()
+            wandb.log({f"{mode}_loss": loss_value, f"{mode}_acc": acc}, step=epoch)
             print(f"{mode} acc : {float(acc)}, loss: {float(loss_value)}")
 
             # Reset training metrics at the end of each epoch
