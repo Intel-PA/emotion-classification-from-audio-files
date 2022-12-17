@@ -15,3 +15,4 @@ wandb/
 *.png
 audio_aug/
 env_setup_done
+*.ptf
