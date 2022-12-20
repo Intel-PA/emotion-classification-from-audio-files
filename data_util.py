@@ -11,6 +11,7 @@ import librosa
 
 from config import TESS_ORIGINAL_FOLDER_PATH
 
+
 SAMPLING_RATE = 22050  # TODO: move this to hparams file
 DEVICE = torch.device("cuda")
 
@@ -80,10 +81,10 @@ class RAVDESSDataset(Dataset):
 
         self.data = [
             (
+                fpath,
                 np.pad(signal,
                        (0, self.longest_signal - len(signal)),
-                       constant_values=0),
-                fpath
+                       constant_values=0)
             )
             for signal, fpath in self.data
         ]
@@ -95,26 +96,36 @@ class CollateFn(object):
         label = int(filepath.name[7:8]) - 1
         return label
 
-    def __init__(self, max_signal_len, batch_sz):
+    def __init__(self, max_signal_len, batch_sz, mel_fn=None, augmentor=None):
         self.max_signal_len = max_signal_len
         self.batch_sz = batch_sz
+        self.mel_fn = mel_fn
+        if augmentor is not None:
+            self.augmentor = augmentor.get(self.mel_fn)
+        else:
+            self.augmentor = None
 
     def __call__(self, batch):
-        signal_batch_tensor = torch.FloatTensor(self.batch_sz, self.max_signal_len)
-        signals = []
+        if self.augmentor is not None:
+            # augment the batch
+            batch = self.augmentor.augment_batch(batch)
+        else:
+            batch = [(filepath, self.mel_fn(signal)) for filepath, signal in batch]
+        mfccs = []
         labels = []
-        for signal, filepath in batch:
-            signal = torch.from_numpy(signal).reshape(1, self.max_signal_len)
-            signals.append(signal)
+        mfccs_batch_tensor = torch.cuda.FloatTensor(self.batch_sz, 40)
+        for filepath, mel in batch:
+            mfcc = torch.from_numpy(mel_to_mfcc(mel)).reshape(1, 40).to(DEVICE)
+            mfccs.append(mfcc)
             label = CollateFn.get_class(filepath)
             labels.append(label)
 
-        torch.cat(signals, out=signal_batch_tensor)
+        torch.cat(mfccs, out=mfccs_batch_tensor)
         label_batch_tensor = torch.LongTensor(labels)
-        return signal_batch_tensor, label_batch_tensor
+        return mfccs_batch_tensor, label_batch_tensor
 
 
-def load_data(data_path, batch_sz=100, train_val_test_split=[0.67, 0.33, 0]):
+def load_data(data_path, augmentor, batch_sz=100, train_val_test_split=[0.67, 0.33, 0]):
     assert sum(train_val_test_split) == 1, "Train, val and test fractions should sum to 1!"
     dataset = RAVDESSDataset(data_path)
 
@@ -130,132 +141,32 @@ def load_data(data_path, batch_sz=100, train_val_test_split=[0.67, 0.33, 0]):
                           drop_last=True,
                           batch_size=batch_sz,
                           shuffle=True,
-                          collate_fn=CollateFn(dataset.longest_signal, batch_sz))
+                          collate_fn=CollateFn(dataset.longest_signal, batch_sz, mel_fn=mel_fn, augmentor=augmentor))
+
     val_dl = DataLoader(val_split,
                         drop_last=True,
                         batch_size=batch_sz,
                         shuffle=True,
-                        collate_fn=CollateFn(dataset.longest_signal, batch_sz))
+                        collate_fn=CollateFn(dataset.longest_signal, batch_sz, mel_fn=mel_fn))
 
     return train_dl, val_dl
 
 
-# class RavdessDataset:
-#     def __init__(self,  batch_sz, dataset_root_dir: Path, augmenter=None):
-#         self.val_ds = None
-#         self.train_ds = None
-#         self.loaded_dataset = None
-#         self.batch_sz = batch_sz
-#         self.size = 0
-#         self.sampling_rate = 0
-#         self.dataset = tf.data.Dataset.list_files(f"{dataset_root_dir}/*.wav")
-#         if augmenter is None:
-#             self.augmenter = None
-#         else:
-#             self.augmenter = augmenter.get(self.mel_fn)
-#
-#         self.load_process()
-#         self.split(val_pct=0.33)
-#
-#     def mel_fn(self, signal):
-#         mel_power = librosa.feature.melspectrogram(y=signal, sr=self.sampling_rate)
-#         mel_db = librosa.core.power_to_db(mel_power)
-#         return mel_db
-#
-#     def get_class(self, filepath: Path) -> int:
-#         label = int(filepath.name[7:8]) - 1
-#         return label
-#
-#     def load_audio_features(self, filepath: Path) -> tf.Tensor:
-#         X, sample_rate = librosa.load(filepath, res_type='kaiser_fast')
-#         self.sampling_rate = sample_rate
-#         # mfccs = self.mel_fn(X)
-#         return X
-#
-#     def load_labelled_datapoint(self, filepath: tf.Tensor):
-#         filepath = Path(bytes.decode(filepath.numpy()))
-#         label = self.get_class(filepath)
-#         audio = self.load_audio_features(filepath)
-#         return audio, label
-#
-#     def load_process(self, shuffle_size=1000):
-#         signals = []
-#         labels = []
-#         for filepath in self.dataset:
-#             f, l = self.load_labelled_datapoint(filepath)
-#             signals.append(f)
-#             labels.append(l)
-#             self.size += 1
-#
-#         signals = tf.keras.preprocessing.sequence.pad_sequences(signals, value=-1447, padding='post', dtype=np.float)
-#         self.loaded_dataset = tf.data.Dataset.from_tensor_slices((signals, labels))
-#
-#     def split(self, val_pct):
-#         train_pct = 1 - val_pct
-#         train_size = int(train_pct * self.size)
-#         val_size = int(val_pct * self.size)
-#         train_ds = self.loaded_dataset.take(train_size)
-#         val_ds = self.loaded_dataset.skip(train_size).take(val_size)
-#         # Shuffle data and create batches
-#         train_ds = train_ds.shuffle(buffer_size=1000)
-#         self.train_ds = train_ds.batch(self.batch_sz)
-#
-#         # Make dataset fetch batches in the background during the training of the model.
-#
-#         val_ds = val_ds.shuffle(buffer_size=1000)
-#         self.val_ds = val_ds.batch(self.batch_sz)
-#
-#
-#     def get_train_batch(self):
-#         # only augment train batch
-#         batch = next(iter(self.train_ds))
-#         signals, labels = batch
-#         signals = signals.numpy().astype(np.float)
-#         signals = [unpad(s) for s in signals]
-#         if self.augmenter is not None and self.augmenter.gamma < 1.0:
-#             aug_batch = self.augmenter.augment_batch(list(zip(labels, signals)))
-#             labels, aug_melspecs = list(zip(*aug_batch))
-#             aug_mfccs = [mel_to_mfcc(m) for m in aug_melspecs]
-#             batch = (tf.convert_to_tensor(aug_mfccs), labels)
-#         else:
-#             mfccs = []
-#             for signal in signals:
-#                 signal = signal.astype(np.float)
-#                 m = mel_to_mfcc(self.mel_fn(signal))
-#                 mfccs.append(m)
-#             batch = (tf.convert_to_tensor(mfccs), labels)
-#         return batch
-#
-#     def get_val_batch(self):
-#         signals, labels = next(iter(self.val_ds))
-#         signals = [unpad(s) for s in signals]
-#         mfccs = []
-#         for signal in signals:
-#             signal = signal.astype(np.float)
-#             m = mel_to_mfcc(self.mel_fn(signal))
-#             mfccs.append(m)
-#         batch = (tf.convert_to_tensor(mfccs), labels)
-#         return batch
-
-
 if __name__ == "__main__":
-    # from audio_aug.augment import get_augment_schemes
-    # import logging
-    #
-    # template = "audio_aug/specaugment_scheme.yml"
-    # runs = get_augment_schemes(gammas=[0.5, 0.75, 0.875, 1],
-    #                            num_runs=1,
-    #                            template_file=template,
-    #                            name_prefix="something")
-    #
-    # for run_num, augmentor in enumerate(runs):
-    #     logging.info(f"Starting Run: {augmentor.config['run_name']} with gamma={augmentor.config['params']['gamma']}")
-    #     train_dl, val_dl = load_data(TESS_ORIGINAL_FOLDER_PATH)
-    #
-    #     for batch_num, item in enumerate(val_dl):
-    #         print("-------------------------------")
-    #         print(f"batch_num: {batch_num}, item: {item[0].shape}")
-    #         print("-------------------------------")
-    train_ds, val_ds = load_data(TESS_ORIGINAL_FOLDER_PATH, 16)
-    for batch_num, (signal_batch, label_batch) in enumerate(val_ds):
-        print(f"{batch_num}: {signal_batch.shape}, {label_batch.shape}")
+    from audio_aug.augment import get_augment_schemes
+    import logging
+
+    template = "audio_aug/specaugment_scheme.yml"
+    runs = get_augment_schemes(gammas=[0.5, 0.75, 0.875, 1],
+                               num_runs=1,
+                               template_file=template,
+                               name_prefix="something")
+
+    for run_num, augmentor in enumerate(runs):
+        logging.info(f"Starting Run: {augmentor.config['run_name']} with gamma={augmentor.config['params']['gamma']}")
+        train_dl, val_dl = load_data(TESS_ORIGINAL_FOLDER_PATH, augmentor, batch_sz=16)
+
+        for batch_num, (label_batch, mfccs_batch) in enumerate(train_dl):
+            print("-------------------------------")
+            print(f"{batch_num}: {mfccs_batch.shape}, {label_batch.shape}")
+            print("-------------------------------")
