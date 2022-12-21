@@ -16,3 +16,4 @@ wandb/
 audio_aug/
 env_setup_done
 *.ptf
+lightning_logs/
