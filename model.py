@@ -2,20 +2,23 @@ import wandb
 import torch
 from torch import nn
 import pytorch_lightning as pl
-from torch.optim import RMSprop
+from torch.optim import RMSprop, SGD
 
 from data_util import load_data, mel_fn, mel_to_mfcc, batch_mel_to_mfcc, batch_mel_fn
 from data_util import RAVDESSDataset
 from config import TESS_ORIGINAL_FOLDER_PATH
+from pytorch_lightning.loggers import WandbLogger
 
 
 def get_model(augmentor, mel_fn):
     return PL_model(1, 8, augmentor, mel_fn)
 
+
 def zip_data_batch(batch):
     signals, labels = batch
-    signals_list = list(signals.numpy())
-    labels_list = list(labels.numpy())
+    signals_list = list(signals.cpu().numpy())
+    labels_list = list(labels.cpu().numpy())
+    return zip(signals_list, labels_list)
 
 
 class PL_model(pl.LightningModule):
@@ -24,14 +27,14 @@ class PL_model(pl.LightningModule):
         self.model = nn.Sequential(
             nn.Conv1d(in_channels=in_channels,
                       out_channels=64,
-                      padding='same',
+                      padding=2,
                       kernel_size=5
                       ),
             nn.ReLU(),
-            nn.Dropout(0.2),
             nn.Flatten(),
-            nn.Linear(64 * 40, outputs),
-            nn.Softmax()
+            nn.Linear(64 * 40, 256),
+            nn.ReLU(),
+            nn.Linear(256, outputs),
         )
         self.augmentor = None if augmentor is None else augmentor.get(mel_fn)
 
@@ -39,47 +42,36 @@ class PL_model(pl.LightningModule):
         return self.model.forward(x)
 
     def configure_optimizers(self):
-        return RMSprop(self.parameters())
+        return SGD(self.parameters(), lr=0.001, momentum=0.9)
 
     def training_step(self, batch, batch_idx):
-        signal_batch, label_batch = batch
-        batch_sz = len(signal_batch)
-        max_signal_len = (signal_batch[0].shape)[0]
-        # TODO: augment stuff here
-        print(batch)
-        augmented_mels = self.augmentor.augment_batch(batch)
-        augmented_mfccs = batch_mel_to_mfcc(augmented_mels)
-        augmented_mfccs_batch = torch.cuda.FloatTensor(batch_sz, 40)
-        torch.cat(augmented_mfccs, out=augmented_mfccs_batch)
-        augmented_mfccs_batch = augmented_mfccs_batch.reshape(batch_sz, 1, max_signal_len)
-        output = self.model(augmented_mfccs_batch)
+        mfcc_batch, label_batch = batch
+        batch_sz = len(mfcc_batch)
+        mfcc_batch = mfcc_batch.unsqueeze(1)
+        output = self.model(mfcc_batch)
         loss = nn.CrossEntropyLoss()(output, label_batch)
 
         preds = torch.argmax(output, dim=1)
         correct = int(torch.eq(preds, label_batch).sum())
-        minibatch_acc = 100 * correct / batch_sz
+        minibatch_acc = correct / batch_sz
 
-        wandb.log({'train_loss': loss,  'train_acc': minibatch_acc})
+        self.log('train_loss', loss, on_step=False, on_epoch=True)
+        self.log('train_acc',  minibatch_acc, on_step=False, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        signal_batch, label_batch = batch
-        batch_sz = len(signal_batch)
-        max_signal_len = (signal_batch[0].shape)[0]
-        signal_batch = signal_batch.reshape(batch_sz, 1, max_signal_len)
-        # TODO: convert to mfcc
-        mels = batch_mel_fn(signal_batch)
-        mfccs = batch_mel_to_mfcc(mels)
-        mfccs_batch = torch.cuda.FloatTensor(batch_sz, 1, 40)
-        torch.cat(mfccs, out=mfccs_batch)
-        output = self.model(mfccs_batch.unsqueeze(1))
+        mfcc_batch, label_batch = batch
+        batch_sz = len(mfcc_batch)
+        mfcc_batch = mfcc_batch.unsqueeze(1)
+        output = self.model(mfcc_batch)
         loss = nn.CrossEntropyLoss()(output, label_batch)
 
         preds = torch.argmax(output, dim=1)
         correct = int(torch.eq(preds, label_batch).sum())
-        minibatch_acc = 100 * correct / batch_sz
+        minibatch_acc = correct / batch_sz
 
-        wandb.log({'val_loss': loss,  'val_acc': minibatch_acc})
+        self.log('val_loss', loss, on_step=False, on_epoch=True)
+        self.log('val_acc',  minibatch_acc, on_step=False, on_epoch=True)
         return loss
 
 
@@ -89,11 +81,13 @@ def train(augmentor, model, epochs, batch_sz):
     wandb.init(project=project_name, reinit=True)
     wandb.run.name = augmentor.config["run_name"]
 
-    train_dl, val_dl = load_data(TESS_ORIGINAL_FOLDER_PATH, batch_sz)
+    train_dl, val_dl = load_data(TESS_ORIGINAL_FOLDER_PATH, augmentor, batch_sz)
+    wandb_logger = WandbLogger()
     trainer = pl.Trainer(accelerator='gpu',
                          devices=1,
                          precision=32,
-                         max_epochs=epochs
+                         max_epochs=epochs,
+                         logger=wandb_logger
                          )
     trainer.fit(model, train_dl, val_dl)
     wandb.join()

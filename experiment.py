@@ -7,10 +7,10 @@ from data_util import mel_fn
 
 
 if __name__ == '__main__':
-    experiment_name = "TESTemoclass_propExp"
+    experiment_name = "emoclass_propExp_torch"
     base_args = sys.argv[1:]  # Remove script name
     template = "audio_aug/adsmote_scheme.yml"
-    runs = get_augment_schemes(gammas=[0.5, 0.75, 0.875, 1],
+    runs = get_augment_schemes(gammas=[1, 0.5, 0.75, 0.875],
                                num_runs=1,
                                template_file=template,
                                name_prefix=experiment_name)

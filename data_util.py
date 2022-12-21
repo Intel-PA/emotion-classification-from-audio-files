@@ -56,7 +56,6 @@ class RAVDESSDataset(Dataset):
 
     def __init__(self, data_root_dir: str):
         super().__init__()
-        self.longest_signal = 0
         self.data = []
         self.load_data(data_root_dir)
 
@@ -72,22 +71,20 @@ class RAVDESSDataset(Dataset):
 
         for filepath in filepaths:
             X, sample_rate = librosa.load(filepath, res_type='kaiser_fast')
-            if X.shape[0] > self.longest_signal:
-                self.longest_signal = X.shape[0]
-
             assert sample_rate == SAMPLING_RATE, f"Wrong sampling rate {sample_rate} for {filepath}"
 
-            self.data.append((X, Path(filepath)))
+            self.data.append((Path(filepath), X))
 
-        self.data = [
-            (
-                fpath,
-                np.pad(signal,
-                       (0, self.longest_signal - len(signal)),
-                       constant_values=0)
-            )
-            for signal, fpath in self.data
-        ]
+        # self.data = [
+        #     (
+        #         fpath,
+        #         signal,
+        #         np.pad(signal,
+        #                (0, self.longest_signal - len(signal)),
+        #                constant_values=0)
+        #     )
+        #     for signal, fpath in self.data
+        # ]
 
 
 class CollateFn(object):
@@ -96,8 +93,7 @@ class CollateFn(object):
         label = int(filepath.name[7:8]) - 1
         return label
 
-    def __init__(self, max_signal_len, batch_sz, mel_fn=None, augmentor=None):
-        self.max_signal_len = max_signal_len
+    def __init__(self, batch_sz, mel_fn=None, augmentor=None):
         self.batch_sz = batch_sz
         self.mel_fn = mel_fn
         if augmentor is not None:
@@ -141,13 +137,13 @@ def load_data(data_path, augmentor, batch_sz=100, train_val_test_split=[0.67, 0.
                           drop_last=True,
                           batch_size=batch_sz,
                           shuffle=True,
-                          collate_fn=CollateFn(dataset.longest_signal, batch_sz, mel_fn=mel_fn, augmentor=augmentor))
+                          collate_fn=CollateFn(batch_sz, mel_fn=mel_fn, augmentor=augmentor))
 
     val_dl = DataLoader(val_split,
                         drop_last=True,
                         batch_size=batch_sz,
                         shuffle=True,
-                        collate_fn=CollateFn(dataset.longest_signal, batch_sz, mel_fn=mel_fn))
+                        collate_fn=CollateFn(batch_sz, mel_fn=mel_fn))
 
     return train_dl, val_dl
 
@@ -156,7 +152,7 @@ if __name__ == "__main__":
     from audio_aug.augment import get_augment_schemes
     import logging
 
-    template = "audio_aug/specaugment_scheme.yml"
+    template = "audio_aug/adsmote_scheme.yml"
     runs = get_augment_schemes(gammas=[0.5, 0.75, 0.875, 1],
                                num_runs=1,
                                template_file=template,
@@ -166,7 +162,7 @@ if __name__ == "__main__":
         logging.info(f"Starting Run: {augmentor.config['run_name']} with gamma={augmentor.config['params']['gamma']}")
         train_dl, val_dl = load_data(TESS_ORIGINAL_FOLDER_PATH, augmentor, batch_sz=16)
 
-        for batch_num, (label_batch, mfccs_batch) in enumerate(train_dl):
+        for batch_num, (mfccs_batch, label_batch) in enumerate(train_dl):
             print("-------------------------------")
-            print(f"{batch_num}: {mfccs_batch.shape}, {label_batch.shape}")
+            print(f"{batch_num}: {mfccs_batch}, {label_batch.shape}")
             print("-------------------------------")
